@@ -3,7 +3,7 @@
 GitHub Pull Request viewer for Neovim.
 **One request to open, zero while reviewing, one to submit.**
 
-> Status: **M0 (scaffolding)**. Nothing user-facing works yet. See [docs/DESIGN.md](docs/DESIGN.md) for goals, decisions, and the roadmap.
+> Status: **M1 (read-only view)**. `:PR open <number|url>` shows a two-pane diff with the file list and existing review threads. Marking files as viewed, commenting, and submitting are not implemented yet. See [docs/DESIGN.md](docs/DESIGN.md) for goals, decisions, and the roadmap.
 
 ## Why another PR plugin?
 
@@ -35,16 +35,26 @@ lazy.nvim:
 
 Run `:checkhealth pr-viewer` to verify `gh` and authentication.
 
-## Usage (planned)
+## Usage
 
 | Command | Description |
 |---|---|
-| `:PR` / `:PR open` | Open the PR for the current branch |
-| `:PR open <number\|url>` | Open a specific PR |
-| `:PR list` | Pick a PR |
+| `:PR open <number\|url>` | Open a PR: `123`, `owner/repo#123`, or a GitHub URL |
+| `:PR open` | Open the PR for the current branch (M4, not yet) |
+| `:PR list` | Pick a PR (M4, not yet) |
 | `:PR health` | `:checkhealth pr-viewer` |
 
-Default buffer-local keymaps use `<localleader>` (see `lua/pr-viewer/config.lua`).
+Default buffer-local keymaps (see `lua/pr-viewer/config.lua`):
+
+| Key | Action |
+|---|---|
+| `]f` / `[f` | Next / previous file |
+| `]t` / `[t` | Next / previous review thread (across files) |
+| `K` | Show the thread(s) on the cursor line |
+| `<CR>` | Open the file under the cursor (file panel) |
+| `q` | Close the PR view |
+
+The left pane is `git show <merge-base>:<path>`. The right pane is the real file from your working tree when `HEAD` matches the PR head (so LSP works), otherwise `git show <head>:<path>`.
 
 ## Development
 
