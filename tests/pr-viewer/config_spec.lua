@@ -1,0 +1,25 @@
+local config = require("pr-viewer.config")
+
+describe("pr-viewer.config", function()
+  it("merges user options over defaults", function()
+    config.setup({ gh = { cmd = "/opt/bin/gh" }, keymaps = { close = false } })
+    local c = config.get()
+    assert.are.equal("/opt/bin/gh", c.gh.cmd)
+    assert.are.equal(30000, c.gh.timeout_ms)
+    assert.are.equal(false, c.keymaps.close)
+    assert.are.equal("]f", c.keymaps.next_file)
+  end)
+
+  it("rejects invalid types", function()
+    assert.has_error(function()
+      config.setup({ gh = { timeout_ms = "slow" } })
+    end)
+  end)
+
+  it("does not leak mutations into defaults", function()
+    config.setup({})
+    config.get().gh.cmd = "mutated"
+    config.setup({})
+    assert.are.equal("gh", config.get().gh.cmd)
+  end)
+end)

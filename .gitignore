@@ -1,0 +1,11 @@
+# test / lint dependencies fetched by `make deps`
+.deps/
+# stylua / luacheck caches
+.luacheckcache
+# macOS
+.DS_Store
+# Claude Code local files
+.claude/.cc-writes
+.claude/settings.local.json
+# stray logs
+nvim.log

@@ -1,0 +1,16 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": ["config:recommended", "helpers:pinGitHubActionDigests"],
+  "minimumReleaseAge": "3 days",
+  "labels": ["dependencies"],
+  "customManagers": [
+    {
+      "customType": "regex",
+      "description": "CI で使う stylua のバージョン",
+      "managerFilePatterns": ["/^\\.github/workflows/ci\\.yml$/"],
+      "matchStrings": ["version:\\s*(?<currentValue>v\\d+\\.\\d+\\.\\d+)\\s*\\n\\s*args: --check"],
+      "depNameTemplate": "JohnnyMorganz/StyLua",
+      "datasourceTemplate": "github-releases"
+    }
+  ]
+}
