@@ -160,6 +160,47 @@ describe("pr-viewer.session.open + ui (integration)", function()
     assert.is_false(has_map)
   end)
 
+  it("toggles viewed optimistically, advances, and flushes on close", function()
+    require("pr-viewer.config").setup({ sync = { debounce_ms = 30 } })
+    local layout = require("pr-viewer.ui.layout")
+    local actions = require("pr-viewer.ui.actions")
+    local sync = require("pr-viewer.gh.sync")
+    layout.open(session)
+    local function base_name()
+      return vim.api.nvim_buf_get_name(vim.api.nvim_win_get_buf(session.wins.base))
+    end
+    H.wait(function()
+      return base_name():match("/base/b%.txt$") ~= nil
+    end)
+    local files_buf = vim.api.nvim_win_get_buf(session.wins.files)
+
+    -- diff ペインで viewed にすると即座に ✓ が付き、次の未 viewed（c.lua）へ進む
+    vim.api.nvim_set_current_win(session.wins.head)
+    actions.toggle_viewed(session)
+    assert.are.equal("VIEWED", session.pr.files[2].viewed)
+    assert.matches("^✓ D b%.txt", vim.api.nvim_buf_get_lines(files_buf, 5, 6, false)[1])
+    assert.matches("viewed 2/3", vim.api.nvim_buf_get_lines(files_buf, 2, 3, false)[1])
+    H.wait(function()
+      return base_name():match("/base/c%.lua$") ~= nil
+    end)
+    assert.are.equal(1, gh.calls) -- まだ送っていない（open の 1 回だけ）
+
+    -- files パネルでは行のファイルをトグルし、移動しない
+    vim.api.nvim_set_current_win(session.wins.files)
+    vim.api.nvim_win_set_cursor(session.wins.files, { 5, 0 }) -- a.lua
+    actions.toggle_viewed(session)
+    assert.are.equal("UNVIEWED", session.pr.files[1].viewed)
+    assert.are.equal(3, session.file_index)
+    assert.is_true(sync.is_dirty(session))
+
+    -- 閉じると debounce を待たずに 1 リクエストで送る
+    layout.close(session)
+    assert.are.equal(2, gh.calls)
+    H.wait(function()
+      return not sync.is_dirty(session)
+    end)
+  end)
+
   it("falls back to git show for the head pane when HEAD differs", function()
     repo.git("checkout", "-q", repo.base)
     gh.restore()

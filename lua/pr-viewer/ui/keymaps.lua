@@ -24,6 +24,7 @@ function M.attach(session, buf, extra)
     end
   end
 
+  map("toggle_viewed", actions.toggle_viewed, "Toggle viewed")
   map("next_file", actions.next_file, "Next file")
   map("prev_file", actions.prev_file, "Previous file")
   map("next_thread", actions.next_thread, "Next thread")

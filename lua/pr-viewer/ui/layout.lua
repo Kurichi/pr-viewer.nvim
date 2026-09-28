@@ -53,6 +53,14 @@ function M.open(session)
   session.tab = tab
   session.wins = { files = files_win, base = base_win, head = head_win }
   session_mod.by_tab[tab] = session
+  require("pr-viewer.gh.sync").on_rollback(session, function(path, viewed)
+    for _, f in ipairs(session.pr.files) do
+      if f.path == path then
+        f.viewed = viewed and "VIEWED" or "UNVIEWED"
+      end
+    end
+    require("pr-viewer.ui.files").render(session)
+  end)
   session.on_update = function()
     require("pr-viewer.ui.files").render(session)
     if session.file_index > 0 then
@@ -106,6 +114,8 @@ end
 ---@param session PrViewer.Session
 function M.close(session)
   require("pr-viewer.ui.thread").close()
+  -- 送信待ちの viewed 変更は待たずに送る
+  require("pr-viewer.gh.sync").flush(session)
   local tab = session.tab
   if tab and vim.api.nvim_tabpage_is_valid(tab) then
     for _, w in ipairs({ session.wins.base, session.wins.head }) do

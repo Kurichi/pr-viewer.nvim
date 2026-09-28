@@ -34,6 +34,7 @@ local M = {}
 ---@field bufs table<string, table<string, integer>> side -> path -> bufnr のキャッシュ
 ---@field bound_bufs table<integer, true> キーマップを張った実ファイルバッファ
 ---@field on_update fun()? 追加ページ取得後に ui が再描画するためのフック
+---@field sync PrViewer.SyncState? gh/sync.lua が遅延初期化する
 
 ---@type table<integer, PrViewer.Session> tabpage -> session
 M.by_tab = {}

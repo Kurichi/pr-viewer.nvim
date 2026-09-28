@@ -57,4 +57,31 @@ query PullRequest($owner: String!, $name: String!, $number: Int!, $filesCursor: 
 }
 ]]
 
+--- 複数ファイルの viewed 状態を 1 リクエストで更新する mutation を組み立てる。
+--- alias（v0, v1, ...）で並べ、path は変数で渡す（文字列エスケープを避ける）。
+---@param pr_id string PullRequest の node id
+---@param items { path: string, viewed: boolean }[]
+---@return string query
+---@return table variables
+function M.mark_viewed_mutation(pr_id, items)
+  local decls = { "$pr: ID!" }
+  local fields = {}
+  local variables = { pr = pr_id }
+  for i, item in ipairs(items) do
+    local var = "p" .. (i - 1)
+    decls[#decls + 1] = "$" .. var .. ": String!"
+    variables[var] = item.path
+    fields[#fields + 1] = ("  v%d: %s(input: { pullRequestId: $pr, path: $%s }) { clientMutationId }"):format(
+      i - 1,
+      item.viewed and "markFileAsViewed" or "unmarkFileAsViewed",
+      var
+    )
+  end
+  local query = ("mutation MarkViewed(%s) {\n%s\n}"):format(
+    table.concat(decls, ", "),
+    table.concat(fields, "\n")
+  )
+  return query, variables
+end
+
 return M
