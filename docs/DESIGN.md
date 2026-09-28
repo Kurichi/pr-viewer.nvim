@@ -1,6 +1,6 @@
 # pr-viewer.nvim 設計ドキュメント
 
-最終更新: 2026-09-26（M1 実装時点）
+最終更新: 2026-09-28（M2 実装時点）
 
 ## 1. ゴール
 
@@ -96,7 +96,7 @@ lua/pr-viewer/
   gh/
     transport.lua   graphql() / rest()               D2。vim.system 非同期、JSON 正規化
     graphql.lua     クエリ・mutation 文字列          D6。データのみ
-    sync.lua        debounce 付き裏同期キュー         D7。楽観的更新の rollback も担当   [M2]
+    sync.lua        debounce 付き裏同期キュー（alias で複数 mutation を 1 リクエストに）D7。失敗時は confirmed 値へ rollback
   async.lua         coroutine で callback API を直列に書く helper（await / must / run）
   model/
     pr.lua          PR / File / Thread / Comment の型と GraphQL からの変換（Draft は M3）
@@ -107,7 +107,7 @@ lua/pr-viewer/
     layout.lua      ファイル一覧 + 2 ペイン diff のタブページ、close/cleanup
     files.lua       ファイル一覧パネル（viewed ✓、A/D、+/-、スレッド数）
     diff.lua        diffthis 両ペイン、base/head バッファのキャッシュ
-    actions.lua     キーマップから呼ぶ操作（next/prev file, next/prev thread, show_thread, close）
+    actions.lua     キーマップから呼ぶ操作（toggle_viewed, next/prev file, next/prev thread, show_thread, close）
     keymaps.lua     バッファローカルキーマップの attach / detach
     thread.lua      スレッド float（M1 は読み取り専用。M3 で入力を足す）
     picker.lua      vim.ui.select 既定、telescope / snacks 任意                        [M4]
@@ -156,7 +156,7 @@ plugin/pr-viewer.lua   :PR コマンド定義のみ（require は遅延）
 |---|---|---|
 | M0 ✅ | 初期セットアップ・設計 | この文書、CI が緑、`:checkhealth pr-viewer` が通る |
 | M1 ✅ | **読み取り専用ビュー** | `:PR open N` で 1 秒以内に 2 ペイン diff。ファイル一覧、既存スレッドの表示、`]f` `]t` 移動。API 呼び出しは 1 回（ページング除く） |
-| M2 | **viewed の楽観的同期** | `,<Space>` で即座に表示が変わり、GitHub 側にも反映される。連打しても mutation はまとめて 1 回 |
+| M2 ✅ | **viewed の楽観的同期** | `,<Space>` で即座に表示が変わり、GitHub 側にも反映される。連打しても mutation はまとめて 1 回 |
 | M3 | **ローカルコメントと一括送信** | 下書きが Neovim 再起動後も残る。`,s` で `addPullRequestReview` 1 回で全部送れる |
 | M4 | **既存スレッド操作・PR 一覧** | 返信・resolve、`:PR list` picker、`:PR` 引数なしでカレントブランチ |
 | M5 | 仕上げ | vimdoc、telescope / snacks picker、libuv transport（任意）、大規模 PR でのページング検証 |

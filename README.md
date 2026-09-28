@@ -3,7 +3,7 @@
 GitHub Pull Request viewer for Neovim.
 **One request to open, zero while reviewing, one to submit.**
 
-> Status: **M1 (read-only view)**. `:PR open <number|url>` shows a two-pane diff with the file list and existing review threads. Marking files as viewed, commenting, and submitting are not implemented yet. See [docs/DESIGN.md](docs/DESIGN.md) for goals, decisions, and the roadmap.
+> Status: **M2 (viewed sync)**. `:PR open <number|url>` shows a two-pane diff with the file list and existing review threads, and `,<Space>` marks files as viewed (optimistic, synced in the background). Commenting and submitting are not implemented yet. See [docs/DESIGN.md](docs/DESIGN.md) for goals, decisions, and the roadmap.
 
 ## Why another PR plugin?
 
@@ -48,6 +48,7 @@ Default buffer-local keymaps (see `lua/pr-viewer/config.lua`):
 
 | Key | Action |
 |---|---|
+| `,<Space>` | Toggle viewed for the current file (or the file under the cursor in the panel). Changes show instantly and sync in one batched request after `sync.debounce_ms` |
 | `]f` / `[f` | Next / previous file |
 | `]t` / `[t` | Next / previous review thread (across files) |
 | `K` | Show the thread(s) on the cursor line |

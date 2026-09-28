@@ -14,6 +14,7 @@ local M = {}
 ---@field files_width integer ファイル一覧パネルの幅
 ---@field thread_width integer スレッド float の最大幅
 ---@field thread_height integer スレッド float の最大高さ
+---@field advance_on_viewed boolean diff ペインで viewed にしたら次の未 viewed ファイルへ進む
 
 ---@class PrViewer.Config
 ---@field gh PrViewer.Config.Gh
@@ -38,6 +39,7 @@ M.defaults = {
     files_width = 36,
     thread_width = 80,
     thread_height = 20,
+    advance_on_viewed = true,
   },
   -- <localleader> 前提（octo と同じ流儀）。docs/DESIGN.md「キーマップ」参照
   keymaps = {
@@ -70,6 +72,7 @@ function M.setup(opts)
   vim.validate("ui.files_width", current.ui.files_width, "number")
   vim.validate("ui.thread_width", current.ui.thread_width, "number")
   vim.validate("ui.thread_height", current.ui.thread_height, "number")
+  vim.validate("ui.advance_on_viewed", current.ui.advance_on_viewed, "boolean")
 end
 
 ---@return PrViewer.Config

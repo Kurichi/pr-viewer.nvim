@@ -139,6 +139,32 @@ function M.show_thread(session)
   require("pr-viewer.ui.thread").show(threads, { focus = true })
 end
 
+--- viewed をトグルする。表示は即座に変え、API 同期は gh/sync.lua が裏でまとめる（D7）。
+--- files パネルではカーソル行のファイル、diff ペインでは表示中のファイルが対象。
+---@param session PrViewer.Session
+function M.toggle_viewed(session)
+  local files = require("pr-viewer.ui.files")
+  local in_panel = vim.api.nvim_get_current_win() == session.wins.files
+  local idx = in_panel and files.index_at_cursor(session) or session.file_index
+  local file = idx and session.pr.files[idx]
+  if not file then
+    return
+  end
+  local viewed = file.viewed ~= "VIEWED"
+  file.viewed = viewed and "VIEWED" or "UNVIEWED"
+  files.render(session)
+  require("pr-viewer.gh.sync").mark_viewed(session, file.path, viewed)
+
+  if viewed and not in_panel and require("pr-viewer.config").get().ui.advance_on_viewed then
+    for i = idx + 1, #session.pr.files do
+      if session.pr.files[i].viewed ~= "VIEWED" then
+        require("pr-viewer.ui.diff").show(session, i)
+        return
+      end
+    end
+  end
+end
+
 ---@param session PrViewer.Session
 function M.close(session)
   require("pr-viewer.ui.layout").close(session)
