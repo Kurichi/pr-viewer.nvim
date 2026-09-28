@@ -251,6 +251,88 @@ function M.delete_comment(session)
   require("pr-viewer.drafts").delete(session, thread)
 end
 
+--- カーソル行のスレッド（下書き以外）を 1 件返す。
+---@param session PrViewer.Session
+---@return PrViewer.Thread?
+local function thread_at_cursor(session)
+  local diff = require("pr-viewer.ui.diff")
+  local side = diff.current_side(session)
+  local file = session.pr.files[session.file_index]
+  if not side or not file then
+    vim.notify("pr-viewer.nvim: move the cursor onto a thread first", vim.log.levels.INFO)
+    return nil
+  end
+  local line = vim.api.nvim_win_get_cursor(0)[1]
+  local found = position.threads_at(session.threads_by_path[file.path] or {}, side, line)
+  if #found == 0 then
+    vim.notify("pr-viewer.nvim: no thread on this line", vim.log.levels.INFO)
+    return nil
+  end
+  return found[1]
+end
+
+--- カーソル行のスレッドに返信する（即公開）。
+---@param session PrViewer.Session
+function M.reply(session)
+  local thread = thread_at_cursor(session)
+  if not thread then
+    return
+  end
+  if thread.pending then
+    vim.notify("pr-viewer.nvim: that is your draft; use edit (,e) instead", vim.log.levels.INFO)
+    return
+  end
+  local last = thread.comments[#thread.comments]
+  require("pr-viewer.ui.thread").input(
+    { title = ("Reply to @%s"):format(last and last.author or "?") },
+    function(body)
+      if body then
+        require("pr-viewer.threads").reply(session, thread, body)
+      end
+    end
+  )
+end
+
+--- カーソル行のスレッドを resolve / unresolve する。
+---@param session PrViewer.Session
+function M.toggle_resolved(session)
+  local thread = thread_at_cursor(session)
+  if thread then
+    require("pr-viewer.threads").toggle_resolved(session, thread)
+  end
+end
+
+--- スレッドと下書きの一覧から選んでジャンプする。
+---@param session PrViewer.Session
+function M.list_threads(session)
+  if #session.anchors == 0 then
+    vim.notify("pr-viewer.nvim: no threads", vim.log.levels.INFO)
+    return
+  end
+  vim.ui.select(session.anchors, {
+    prompt = ("Threads in #%d"):format(session.pr.number),
+    format_item = function(a)
+      local t = a.thread
+      local first = t.comments[1]
+      local body = first and (vim.split(first.body, "\n", { plain = true })[1] or "") or ""
+      local tag = t.pending and (t.sync == "local" and "unsent" or "draft")
+        or (t.resolved and "resolved" or "open")
+      return ("%s:%d %s [%s] @%s: %s"):format(
+        t.path,
+        a.line,
+        a.side == "LEFT" and "L" or "R",
+        tag,
+        first and first.author or "?",
+        body
+      )
+    end,
+  }, function(choice)
+    if choice then
+      jump(session, choice)
+    end
+  end)
+end
+
 --- レビューを送信する。event を選び、本文を入力してから 1 リクエストで送る。
 ---@param session PrViewer.Session
 function M.submit(session)

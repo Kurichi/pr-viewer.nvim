@@ -140,10 +140,15 @@ function M.merge_page(pr, node)
 end
 
 --- `data` 直下（transport.graphql が返す形）から PR を組み立てる。
+--- 番号で引いた `pullRequest` と、ブランチで引いた `pullRequests.nodes[1]` の両方を受ける。
 ---@param data table
 ---@return PrViewer.PR
 function M.from_graphql(data)
-  local node = data and val(data.repository) and val(data.repository.pullRequest)
+  local repo = data and val(data.repository)
+  local node = repo and val(repo.pullRequest)
+  if not node and repo and val(repo.pullRequests) then
+    node = repo.pullRequests.nodes and repo.pullRequests.nodes[1]
+  end
   if not node then
     error("pull request not found in GraphQL response", 0)
   end
@@ -215,6 +220,36 @@ function M.stats(pr)
     end
   end
   return s
+end
+
+---@class PrViewer.PRSummary
+---@field number integer
+---@field title string
+---@field is_draft boolean
+---@field author string
+---@field head_ref string
+---@field updated_at string
+---@field review_decision string?
+
+--- `:PR list` 用の一覧。
+---@param data table
+---@return PrViewer.PRSummary[]
+function M.list_from_graphql(data)
+  local repo = data and val(data.repository)
+  local nodes = repo and val(repo.pullRequests) and repo.pullRequests.nodes or {}
+  local list = {}
+  for _, n in ipairs(nodes) do
+    list[#list + 1] = {
+      number = n.number,
+      title = n.title or "",
+      is_draft = n.isDraft == true,
+      author = val(n.author) and n.author.login or "ghost",
+      head_ref = n.headRefName or "",
+      updated_at = n.updatedAt or "",
+      review_decision = val(n.reviewDecision),
+    }
+  end
+  return list
 end
 
 return M

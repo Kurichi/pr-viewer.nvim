@@ -45,6 +45,12 @@ describe("pr-viewer.model.pr", function()
     assert.are.same({ files = 3, viewed = 1, threads = 3, unresolved = 2, drafts = 0 }, s)
   end)
 
+  it("accepts the by-branch shape", function()
+    local pr = model.from_graphql(H.pr_data_by_branch({ base = "b", head = "h" }))
+    assert.are.equal(7, pr.number)
+    assert.are.equal("kurichi", pr.viewer)
+  end)
+
   it("errors on missing pull request", function()
     assert.has_error(function()
       model.from_graphql({ repository = { pullRequest = vim.NIL } })

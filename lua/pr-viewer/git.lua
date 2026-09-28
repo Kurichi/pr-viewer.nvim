@@ -97,7 +97,9 @@ end
 ---@param rev string
 ---@param cb fun(err: string?, oid: string?)
 function M.rev_parse(root, rev, cb)
-  M.exec({ "rev-parse", "--verify", rev }, root, function(err, out)
+  local args = { "rev-parse", "--verify" }
+  vim.list_extend(args, vim.split(rev, " ", { plain = true, trimempty = true }))
+  M.exec(args, root, function(err, out)
     cb(err, out and vim.trim(out) or nil)
   end)
 end

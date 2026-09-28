@@ -4,11 +4,32 @@
 -- ページングは first:100 を超えたときだけ、初回描画後に endCursor から追加取得する。
 local M = {}
 
-M.pull_request = [[
-query PullRequest($owner: String!, $name: String!, $number: Int!, $filesCursor: String, $threadsCursor: String) {
-  viewer { login }
-  repository(owner: $owner, name: $name) {
-    pullRequest(number: $number) {
+-- スレッド 1 件分のフィールド。query と addPullRequestReviewThread の戻りで共有する
+M.thread_fields = [[
+  id
+  isResolved
+  isOutdated
+  isCollapsed
+  path
+  line
+  startLine
+  diffSide
+  startDiffSide
+  comments(first: 50) {
+    nodes {
+      id
+      databaseId
+      author { login }
+      body
+      createdAt
+      url
+      pullRequestReview { id state }
+    }
+  }
+]]
+
+-- PR 1 件分のフィールド。番号で開くときもブランチで開くときも同じ
+M.pr_fields = [[
       id
       number
       title
@@ -32,46 +53,62 @@ query PullRequest($owner: String!, $name: String!, $number: Int!, $filesCursor: 
       reviewThreads(first: 100, after: $threadsCursor) {
         pageInfo { hasNextPage endCursor }
         nodes {
-          id
-          isResolved
-          isOutdated
-          isCollapsed
-          path
-          line
-          startLine
-          diffSide
-          startDiffSide
-          comments(first: 50) {
-            nodes {
-              id
-              databaseId
-              author { login }
-              body
-              createdAt
-              url
-              pullRequestReview { id state }
-            }
-          }
+]] .. M.thread_fields .. [[
         }
+      }
+]]
+
+M.pull_request = [[
+query PullRequest($owner: String!, $name: String!, $number: Int!, $filesCursor: String, $threadsCursor: String) {
+  viewer { login }
+  repository(owner: $owner, name: $name) {
+    pullRequest(number: $number) {
+]] .. M.pr_fields .. [[
+    }
+  }
+}
+]]
+
+-- カレントブランチの PR を 1 回で開く（番号を調べる往復を省く）
+M.pull_request_by_branch = [[
+query PullRequestByBranch(
+  $owner: String!, $name: String!, $branch: String!, $filesCursor: String, $threadsCursor: String
+) {
+  viewer { login }
+  repository(owner: $owner, name: $name) {
+    pullRequests(headRefName: $branch, states: [OPEN], first: 1, orderBy: { field: UPDATED_AT, direction: DESC }) {
+      nodes {
+]] .. M.pr_fields .. [[
       }
     }
   }
 }
 ]]
 
--- スレッド 1 件分のフィールド。query と addPullRequestReviewThread の戻りで共有する
-M.thread_fields = [[
-  id
-  isResolved
-  isOutdated
-  isCollapsed
-  path
-  line
-  startLine
-  diffSide
-  startDiffSide
-  comments(first: 50) {
-    nodes {
+-- `:PR list` 用。open な PR を更新順に
+M.pull_request_list = [[
+query PullRequestList($owner: String!, $name: String!) {
+  repository(owner: $owner, name: $name) {
+    pullRequests(states: [OPEN], first: 50, orderBy: { field: UPDATED_AT, direction: DESC }) {
+      nodes {
+        number
+        title
+        isDraft
+        author { login }
+        headRefName
+        updatedAt
+        reviewDecision
+      }
+    }
+  }
+}
+]]
+
+-- 既存スレッドへの返信（review id を付けなければ即公開）
+M.add_thread_reply = [[
+mutation AddThreadReply($thread: ID!, $body: String!) {
+  addPullRequestReviewThreadReply(input: { pullRequestReviewThreadId: $thread, body: $body }) {
+    comment {
       id
       databaseId
       author { login }
@@ -81,6 +118,19 @@ M.thread_fields = [[
       pullRequestReview { id state }
     }
   }
+}
+]]
+
+M.resolve_thread = [[
+mutation ResolveThread($thread: ID!) {
+  resolveReviewThread(input: { threadId: $thread }) { thread { id isResolved } }
+}
+]]
+
+M.unresolve_thread = [[
+mutation UnresolveThread($thread: ID!) {
+  unresolveReviewThread(input: { threadId: $thread }) { thread { id isResolved } }
+}
 ]]
 
 -- pending review を作る（下書きの入れ物。event を付けないと PENDING になる）

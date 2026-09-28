@@ -190,6 +190,48 @@ function H.pr_data(repo, overrides)
   return vim.tbl_deep_extend("force", data, overrides or {})
 end
 
+--- ブランチで引いたときの形（pullRequests.nodes[1]）。
+---@param repo { base: string, head: string }
+---@return table
+function H.pr_data_by_branch(repo)
+  local data = H.pr_data(repo)
+  local pr = data.repository.pullRequest
+  data.repository.pullRequest = nil
+  data.repository.pullRequests = { nodes = { pr } }
+  return data
+end
+
+--- `:PR list` の応答。
+---@return table
+function H.list_data()
+  return {
+    repository = {
+      pullRequests = {
+        nodes = {
+          {
+            number = 9,
+            title = "Nine",
+            isDraft = false,
+            author = { login = "a" },
+            headRefName = "nine",
+            updatedAt = "2026-09-28T00:00:00Z",
+            reviewDecision = "APPROVED",
+          },
+          {
+            number = 7,
+            title = "Add b",
+            isDraft = true,
+            author = { login = "alice" },
+            headRefName = "feat",
+            updatedAt = "2026-09-27T00:00:00Z",
+            reviewDecision = vim.NIL,
+          },
+        },
+      },
+    },
+  }
+end
+
 --- transport._system を差し替え、GraphQL に固定レスポンスを返す。呼び出し回数を数える。
 ---@param data table
 ---@return { calls: integer, restore: fun() }

@@ -11,7 +11,7 @@ local M = {}
 ---@class PrViewer.Target
 ---@field owner string?
 ---@field repo string?
----@field number integer
+---@field number integer? nil ならカレントブランチの PR
 
 ---@class PrViewer.ThreadAnchor
 ---@field file_index integer
@@ -48,7 +48,7 @@ M.by_tab = {}
 ---@return string? err
 function M.parse_target(arg)
   if not arg or arg == "" then
-    return nil, "PR number or URL is required (current-branch detection comes in M4)"
+    return {} -- カレントブランチ
   end
   local n = arg:match("^#?(%d+)$")
   if n then
@@ -172,9 +172,32 @@ function M.open(target, cb)
       owner, repo = remote.owner, remote.repo
     end
 
-    local data = async.must(async.await(function(k)
-      query_pr(owner, repo, target.number, {}, k)
-    end))
+    local data
+    if target.number then
+      data = async.must(async.await(function(k)
+        query_pr(owner, repo, target.number, {}, k)
+      end))
+    else
+      local branch = async.must(async.await(function(k)
+        git.rev_parse(root, "--abbrev-ref HEAD", k)
+      end))
+      if branch == "HEAD" then
+        error("detached HEAD: pass a PR number or URL", 0)
+      end
+      data = async.must(async.await(function(k)
+        transport.graphql(
+          graphql.pull_request_by_branch,
+          { owner = owner, name = repo, branch = branch },
+          k
+        )
+      end))
+      local nodes = data.repository
+        and data.repository.pullRequests
+        and data.repository.pullRequests.nodes
+      if not nodes or #nodes == 0 then
+        error(("no open pull request for branch %s"):format(branch), 0)
+      end
+    end
     local pr = model.from_graphql(data)
 
     local missing = false
@@ -226,6 +249,30 @@ function M.open(target, cb)
     end
   end, function(err)
     cb(err, nil)
+  end)
+end
+
+--- open な PR の一覧を取る（`:PR list`）。
+---@param cb fun(err: string?, list: PrViewer.PRSummary?, remote: PrViewer.Remote?)
+function M.list(cb)
+  async.run(function()
+    local root = async.must(async.await(git.root))
+    local url = async.must(async.await(function(k)
+      git.remote_url(root, k)
+    end))
+    local remote = git.parse_remote(url)
+    if not remote then
+      error(("cannot parse origin remote URL: %s"):format(url), 0)
+    end
+    local data = async.must(async.await(function(k)
+      transport.graphql(graphql.pull_request_list, { owner = remote.owner, name = remote.repo }, k)
+    end))
+    local list = model.list_from_graphql(data)
+    vim.schedule(function()
+      cb(nil, list, remote)
+    end)
+  end, function(err)
+    cb(err, nil, nil)
   end)
 end
 
