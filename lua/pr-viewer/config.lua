@@ -10,10 +10,16 @@ local M = {}
 ---@class PrViewer.Config.Diff
 ---@field use_local_fs boolean head をチェックアウト中なら右ペインに実ファイルを使う（LSP を効かせる）
 
+---@class PrViewer.Config.Ui
+---@field files_width integer ファイル一覧パネルの幅
+---@field thread_width integer スレッド float の最大幅
+---@field thread_height integer スレッド float の最大高さ
+
 ---@class PrViewer.Config
 ---@field gh PrViewer.Config.Gh
 ---@field sync PrViewer.Config.Sync
 ---@field diff PrViewer.Config.Diff
+---@field ui PrViewer.Config.Ui
 ---@field keymaps table<string, string|false> バッファローカルキーマップ。false で無効化
 
 ---@type PrViewer.Config
@@ -28,6 +34,11 @@ M.defaults = {
   diff = {
     use_local_fs = true,
   },
+  ui = {
+    files_width = 36,
+    thread_width = 80,
+    thread_height = 20,
+  },
   -- <localleader> 前提（octo と同じ流儀）。docs/DESIGN.md「キーマップ」参照
   keymaps = {
     toggle_viewed = "<localleader><space>",
@@ -35,6 +46,8 @@ M.defaults = {
     prev_file = "[f",
     next_thread = "]t",
     prev_thread = "[t",
+    show_thread = "K",
+    open_file = "<CR>", -- ファイル一覧パネルのみ
     add_comment = "<localleader>c",
     reply = "<localleader>r",
     resolve = "<localleader>R",
@@ -54,6 +67,9 @@ function M.setup(opts)
   vim.validate("gh.timeout_ms", current.gh.timeout_ms, "number")
   vim.validate("sync.debounce_ms", current.sync.debounce_ms, "number")
   vim.validate("diff.use_local_fs", current.diff.use_local_fs, "boolean")
+  vim.validate("ui.files_width", current.ui.files_width, "number")
+  vim.validate("ui.thread_width", current.ui.thread_width, "number")
+  vim.validate("ui.thread_height", current.ui.thread_height, "number")
 end
 
 ---@return PrViewer.Config
