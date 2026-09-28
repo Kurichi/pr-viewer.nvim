@@ -57,6 +57,7 @@ end
 ---@return table
 function H.pr_data(repo, overrides)
   local data = {
+    viewer = { login = "kurichi" },
     repository = {
       pullRequest = {
         id = "PR_1",
@@ -74,6 +75,7 @@ function H.pr_data(repo, overrides)
         headRepository = { nameWithOwner = "owner/repo" },
         viewerLatestReview = vim.NIL,
         reviewDecision = vim.NIL,
+        pendingReviews = { nodes = {} },
         files = {
           pageInfo = { hasNextPage = false, endCursor = vim.NIL },
           nodes = {

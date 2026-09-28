@@ -1,6 +1,6 @@
 # pr-viewer.nvim 設計ドキュメント
 
-最終更新: 2026-09-28（M2 実装時点）
+最終更新: 2026-09-28（M3 実装時点）
 
 ## 1. ゴール
 
@@ -66,10 +66,10 @@ review.nvim 側を壊さずに済み、pr-viewer は PR 専用のデータモデ
 - 右ペインは `use_local_fs = true` かつ head をチェックアウト中なら作業ツリーの実ファイル（LSP・gd がそのまま効く）。それ以外は `git show <head>:<path>` の scratch バッファにフォールバック
 - 両ペインを `diffthis` で並べる。GitHub 側の diff テキストは使わない（表示差異の原因になり、API も増える）
 
-### D5. 状態はメモリ上の 1 テーブル（PR ごと）。下書きだけディスクに残す
+### D5. 状態はメモリ上の 1 テーブル（PR ごと）。ディスクに残すのは送信に失敗した下書きだけ
 
-- `Session = { pr, files[], threads[], drafts[], viewed = {path -> state}, pending = queue }`
-- 未送信コメント（drafts）は `stdpath("state")/pr-viewer/<owner>/<repo>/<number>.json` に保存し、Neovim を落としても復元できる。書き込みは review.nvim の tmp + rename 方式を移植
+- `Session = { pr, files[], threads[], anchors[], sync = queue }`。下書きも `threads[]` の要素（`pending = true`）として扱う
+- 下書きの正本は GitHub の pending review（D7）。送信に失敗したものだけ `stdpath("state")/pr-viewer/<owner>/<repo>/<number>.json` に退避する。書き込みは review.nvim の tmp + rename 方式を移植
 - サーバ状態のキャッシュはしない（次に開くとき 1 回取り直す方が単純で、整合性の問題を持ち込まない）
 
 ### D6. 起動時に 1 クエリで全部取る
@@ -79,10 +79,11 @@ review.nvim 側を壊さずに済み、pr-viewer は PR 専用のデータモデ
 - `files(first: 100)` / `reviewThreads(first: 100)` を超える PR は、初回描画後に `endCursor` から追加取得する（レビューを止めない）
 - `headRefOid` を保持し、後の mutation / 位置計算はすべてこの oid 基準にする（レビュー中に push されてもズレない）
 
-### D7. 書き込みは楽観的更新 + 裏同期。コメントは submit まで一切送らない
+### D7. 書き込みは楽観的更新 + 裏同期。下書きは GitHub の pending review に置く
 
 - **viewed トグル**: 即座にローカル状態と表示を変え、`sync.debounce_ms`（既定 500ms）でまとめて `markFileAsViewed` / `unmarkFileAsViewed` mutation を裏で投げる。同じファイルの連打は最後の状態だけ送る。失敗時だけ通知して表示を戻す
-- **コメント**: レビュー中はローカルの drafts に貯め、`submit` 時に `addPullRequestReview(threads: [...])` 1 回で送る（body・event・全スレッドを同時に受け付ける）
+- **コメント（下書き）**: 置き場所は GitHub の **pending review**（他のクライアントからも見え、Neovim を落としても残る）。`,c` は即座にローカルにスレッドを作って表示し、裏で `addPullRequestReview`（pending review の作成、初回のみ・直列化）→ `addPullRequestReviewThread` を送る。ネットワーク等の一時的な失敗なら `stdpath("state")/pr-viewer/<owner>/<repo>/<number>.json` に退避し、次回 open 時と submit 前に再送する。GitHub が拒否した（位置が diff 外など）恒久的な失敗は再送しても無駄なので、通知して下書きを消す
+- **submit**: `submitPullRequestReview` 1 回（下書きが無ければ `addPullRequestReview` に event を付けて 1 回）。ローカル退避分が残っていれば送信を中止する
 - **返信 / resolve**: 既存スレッドへの操作は対象が明確なので個別 mutation でよいが、同じく楽観的更新にする（M4）
 
 ## 3. アーキテクチャ
@@ -99,7 +100,7 @@ lua/pr-viewer/
     sync.lua        debounce 付き裏同期キュー（alias で複数 mutation を 1 リクエストに）D7。失敗時は confirmed 値へ rollback
   async.lua         coroutine で callback API を直列に書く helper（await / must / run）
   model/
-    pr.lua          PR / File / Thread / Comment の型と GraphQL からの変換（Draft は M3）
+    pr.lua          PR / File / Thread / Comment の型と GraphQL からの変換。下書きも Thread（pending = true）
     position.lua    (path, side, line) <-> バッファ行 の対応
   session.lua       PR ごとの状態、parse_target、ページング追加取得   D5
   git.lua           show / fetch / merge-base / rev-parse   D4。vim.system 非同期
@@ -109,10 +110,11 @@ lua/pr-viewer/
     diff.lua        diffthis 両ペイン、base/head バッファのキャッシュ
     actions.lua     キーマップから呼ぶ操作（toggle_viewed, next/prev file, next/prev thread, show_thread, close）
     keymaps.lua     バッファローカルキーマップの attach / detach
-    thread.lua      スレッド float（M1 は読み取り専用。M3 で入力を足す）
+    thread.lua      スレッド float（表示 + 本文入力）
     picker.lua      vim.ui.select 既定、telescope / snacks 任意                        [M4]
+  drafts.lua        下書きのライフサイクル（add / edit / delete / resend / submit）D7
   signs.lua         extmark sign / virt_text（review.nvim から移植）
-  storage.lua       JSON の読み書き（review.nvim から移植）                              [M3]
+  storage.lua       送信失敗した下書きの退避 JSON（review.nvim から移植）
 plugin/pr-viewer.lua   :PR コマンド定義のみ（require は遅延）
 ```
 
@@ -143,6 +145,7 @@ plugin/pr-viewer.lua   :PR コマンド定義のみ（require は遅延）
 | `]f` / `[f` | 次 / 前のファイル | M1 |
 | `]t` / `[t` | 次 / 前のスレッド（ファイルをまたぐ） | M1 |
 | `,c` | カーソル行 / 選択範囲にコメント（下書き） | M3 |
+| `,e` / `,d` | カーソル行の下書きを編集 / 削除 | M3 |
 | `,r` | スレッドに返信 | M4 |
 | `,R` | スレッドを resolve / unresolve | M4 |
 | `,s` | レビュー送信（approve / request changes / comment を選ぶ） | M3 |
@@ -157,7 +160,7 @@ plugin/pr-viewer.lua   :PR コマンド定義のみ（require は遅延）
 | M0 ✅ | 初期セットアップ・設計 | この文書、CI が緑、`:checkhealth pr-viewer` が通る |
 | M1 ✅ | **読み取り専用ビュー** | `:PR open N` で 1 秒以内に 2 ペイン diff。ファイル一覧、既存スレッドの表示、`]f` `]t` 移動。API 呼び出しは 1 回（ページング除く） |
 | M2 ✅ | **viewed の楽観的同期** | `,<Space>` で即座に表示が変わり、GitHub 側にも反映される。連打しても mutation はまとめて 1 回 |
-| M3 | **ローカルコメントと一括送信** | 下書きが Neovim 再起動後も残る。`,s` で `addPullRequestReview` 1 回で全部送れる |
+| M3 ✅ | **リモート下書きと送信** | `,c` の下書きが GitHub の pending review に非同期で乗り、失敗時はローカル退避 + 再送。`,s` で `submitPullRequestReview` 1 回 |
 | M4 | **既存スレッド操作・PR 一覧** | 返信・resolve、`:PR list` picker、`:PR` 引数なしでカレントブランチ |
 | M5 | 仕上げ | vimdoc、telescope / snacks picker、libuv transport（任意）、大規模 PR でのページング検証 |
 

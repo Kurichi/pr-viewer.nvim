@@ -33,7 +33,16 @@ end
 ---@return string
 local function file_line(f, threads)
   local mark = f.viewed == "VIEWED" and "✓" or " "
-  local badge = #threads > 0 and (" ●%d"):format(#threads) or ""
+  local n_threads, n_drafts = 0, 0
+  for _, t in ipairs(threads) do
+    if t.pending then
+      n_drafts = n_drafts + 1
+    else
+      n_threads = n_threads + 1
+    end
+  end
+  local badge = (n_threads > 0 and (" ●%d"):format(n_threads) or "")
+    .. (n_drafts > 0 and (" ✎%d"):format(n_drafts) or "")
   local kind = ({ ADDED = "A", DELETED = "D", RENAMED = "R" })[f.change_type] or " "
   return ("%s %s %s  +%d -%d%s"):format(mark, kind, f.path, f.additions, f.deletions, badge)
 end

@@ -28,6 +28,9 @@ function M.render(threads)
     if t.outdated then
       flags[#flags + 1] = "outdated"
     end
+    if t.pending then
+      flags[#flags + 1] = t.sync == "local" and "draft, unsent" or "draft"
+    end
     local where = t.line and ("%s:%d"):format(t.path, t.line) or t.path
     lines[#lines + 1] = ("### %s%s"):format(
       where,
@@ -101,6 +104,72 @@ function M.show(threads, opts)
         end
       end,
     })
+  end
+end
+
+--- 本文入力用の float。確定は <C-s>（insert/normal）か normal の <CR>、中止は q / <Esc>。
+--- review.nvim の ui.add_comment から入力部分だけを移植した。
+---@param opts { title: string, initial?: string[] }
+---@param cb fun(body: string?) 中止なら nil
+function M.input(opts, cb)
+  M.close()
+  local ui = config.get().ui
+  local buf = vim.api.nvim_create_buf(false, true)
+  vim.api.nvim_buf_set_lines(buf, 0, -1, false, opts.initial or {})
+  vim.bo[buf].bufhidden = "wipe"
+  vim.bo[buf].filetype = "markdown"
+
+  local width = math.max(40, math.min(ui.thread_width, vim.o.columns - 4))
+  local height = math.min(12, vim.o.lines - 4)
+  local win = vim.api.nvim_open_win(buf, true, {
+    relative = "cursor",
+    row = 1,
+    col = 0,
+    width = width,
+    height = height,
+    style = "minimal",
+    border = "rounded",
+    title = " " .. opts.title .. " (<C-s> submit, q cancel) ",
+    title_pos = "left",
+  })
+  vim.wo[win].wrap = true
+  vim.wo[win].linebreak = true
+  current_win = win
+
+  local finished = false
+  local function finish(body)
+    if finished then
+      return
+    end
+    finished = true
+    M.close()
+    cb(body)
+  end
+  local function submit()
+    local lines = vim.api.nvim_buf_get_lines(buf, 0, -1, false)
+    local body = vim.trim(table.concat(lines, "\n"))
+    if body == "" then
+      finish(nil)
+    else
+      finish(body)
+    end
+  end
+  vim.keymap.set({ "n", "i" }, "<C-s>", submit, { buffer = buf, nowait = true, desc = "Submit" })
+  vim.keymap.set("n", "<CR>", submit, { buffer = buf, nowait = true, desc = "Submit" })
+  for _, k in ipairs({ "q", "<Esc>" }) do
+    vim.keymap.set("n", k, function()
+      finish(nil)
+    end, { buffer = buf, nowait = true, desc = "Cancel" })
+  end
+  vim.api.nvim_create_autocmd("BufWipeout", {
+    buffer = buf,
+    once = true,
+    callback = function()
+      finish(nil)
+    end,
+  })
+  if not opts.initial or #opts.initial == 0 then
+    vim.cmd.startinsert()
   end
 end
 

@@ -42,7 +42,7 @@ describe("pr-viewer.model.pr", function()
     assert.are.equal(2, #by_path["a.lua"])
     assert.are.equal(1, #by_path["c.lua"])
     local s = model.stats(pr)
-    assert.are.same({ files = 3, viewed = 1, threads = 3, unresolved = 2 }, s)
+    assert.are.same({ files = 3, viewed = 1, threads = 3, unresolved = 2, drafts = 0 }, s)
   end)
 
   it("errors on missing pull request", function()

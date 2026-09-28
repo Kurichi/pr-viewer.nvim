@@ -13,6 +13,8 @@ local function ensure_highlights()
   hl_defined = true
   vim.api.nvim_set_hl(0, "PrViewerThread", { link = "DiagnosticWarn", default = true })
   vim.api.nvim_set_hl(0, "PrViewerThreadResolved", { link = "DiagnosticOk", default = true })
+  vim.api.nvim_set_hl(0, "PrViewerDraft", { link = "DiagnosticInfo", default = true })
+  vim.api.nvim_set_hl(0, "PrViewerDraftLocal", { link = "DiagnosticError", default = true })
   vim.api.nvim_set_hl(0, "PrViewerVirtText", { link = "Comment", default = true })
   vim.api.nvim_set_hl(0, "PrViewerFileViewed", { link = "Comment", default = true })
   vim.api.nvim_set_hl(0, "PrViewerFileCurrent", { link = "Title", default = true })
@@ -33,7 +35,12 @@ local function summary(thread)
     line = line:sub(1, 57) .. "..."
   end
   local extra = #thread.comments > 1 and (" (+%d)"):format(#thread.comments - 1) or ""
-  return ("@%s: %s%s"):format(first.author, line, extra)
+  local prefix = ""
+  if thread.pending then
+    prefix = ({ synced = "[draft] ", sending = "[sending] ", ["local"] = "[local, unsent] " })[thread.sync]
+      or "[draft] "
+  end
+  return ("%s@%s: %s%s"):format(prefix, first.author, line, extra)
 end
 
 --- buf（side 側のファイル）にスレッドの印を付け直す。
@@ -49,9 +56,15 @@ function M.place(buf, threads, side)
     if a and a.side == side then
       local row = math.min(a.line, line_count) - 1
       if row >= 0 then
-        local hl = t.resolved and "PrViewerThreadResolved" or "PrViewerThread"
+        local hl, sign = "PrViewerThread", "●"
+        if t.pending then
+          hl = t.sync == "local" and "PrViewerDraftLocal" or "PrViewerDraft"
+          sign = t.sync == "local" and "!" or "✎"
+        elseif t.resolved then
+          hl, sign = "PrViewerThreadResolved", "✓"
+        end
         vim.api.nvim_buf_set_extmark(buf, M.ns, row, 0, {
-          sign_text = t.resolved and "✓" or "●",
+          sign_text = sign,
           sign_hl_group = hl,
           virt_text = { { " " .. summary(t), "PrViewerVirtText" } },
           virt_text_pos = "eol",

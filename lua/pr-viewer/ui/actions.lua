@@ -165,6 +165,129 @@ function M.toggle_viewed(session)
   end
 end
 
+--- カーソル行（visual なら範囲）の位置を DraftPosition にする。
+---@param session PrViewer.Session
+---@return PrViewer.DraftPosition?
+local function position_at_cursor(session)
+  local diff = require("pr-viewer.ui.diff")
+  local side = diff.current_side(session)
+  local file = session.pr.files[session.file_index]
+  if not side or not file then
+    vim.notify("pr-viewer.nvim: move the cursor into a diff pane first", vim.log.levels.INFO)
+    return nil
+  end
+  local mode = vim.fn.mode()
+  local first, last = vim.api.nvim_win_get_cursor(0)[1], nil
+  if mode == "v" or mode == "V" or mode == "\22" then
+    local a, b = vim.fn.getpos("v")[2], vim.fn.getpos(".")[2]
+    first, last = math.min(a, b), math.max(a, b)
+    vim.api.nvim_feedkeys(vim.api.nvim_replace_termcodes("<Esc>", true, false, true), "nx", false)
+  end
+  return {
+    path = file.path,
+    side = side,
+    line = last or first,
+    start_line = last and last ~= first and first or nil,
+    start_side = last and last ~= first and side or nil,
+  }
+end
+
+--- カーソル行の自分の下書きを 1 件返す（複数なら最初）。
+---@param session PrViewer.Session
+---@return PrViewer.Thread?
+local function draft_at_cursor(session)
+  local diff = require("pr-viewer.ui.diff")
+  local side = diff.current_side(session)
+  local file = session.pr.files[session.file_index]
+  if not side or not file then
+    return nil
+  end
+  local line = vim.api.nvim_win_get_cursor(0)[1]
+  for _, t in ipairs(position.threads_at(session.threads_by_path[file.path] or {}, side, line)) do
+    if t.pending then
+      return t
+    end
+  end
+  vim.notify("pr-viewer.nvim: no draft comment on this line", vim.log.levels.INFO)
+  return nil
+end
+
+--- 下書きコメントを追加する（normal: カーソル行、visual: 範囲）。
+---@param session PrViewer.Session
+function M.add_comment(session)
+  local pos = position_at_cursor(session)
+  if not pos then
+    return
+  end
+  local where = pos.start_line and ("%s:%d-%d"):format(pos.path, pos.start_line, pos.line)
+    or ("%s:%d"):format(pos.path, pos.line)
+  require("pr-viewer.ui.thread").input({ title = "Comment " .. where }, function(body)
+    if body then
+      require("pr-viewer.drafts").add(session, pos, body)
+    end
+  end)
+end
+
+---@param session PrViewer.Session
+function M.edit_comment(session)
+  local thread = draft_at_cursor(session)
+  if not thread then
+    return
+  end
+  local initial = vim.split(thread.comments[1].body, "\n", { plain = true })
+  require("pr-viewer.ui.thread").input({ title = "Edit comment", initial = initial }, function(body)
+    if body then
+      require("pr-viewer.drafts").edit(session, thread, body)
+    end
+  end)
+end
+
+---@param session PrViewer.Session
+function M.delete_comment(session)
+  local thread = draft_at_cursor(session)
+  if not thread then
+    return
+  end
+  require("pr-viewer.drafts").delete(session, thread)
+end
+
+--- レビューを送信する。event を選び、本文を入力してから 1 リクエストで送る。
+---@param session PrViewer.Session
+function M.submit(session)
+  local drafts = require("pr-viewer.drafts")
+  local stats = require("pr-viewer.model.pr").stats(session.pr)
+  local events = {
+    {
+      label = ("Comment (%d draft%s)"):format(stats.drafts, stats.drafts == 1 and "" or "s"),
+      event = "COMMENT",
+    },
+    { label = "Approve", event = "APPROVE" },
+    { label = "Request changes", event = "REQUEST_CHANGES" },
+  }
+  vim.ui.select(events, {
+    prompt = ("Submit review for #%d"):format(session.pr.number),
+    format_item = function(item)
+      return item.label
+    end,
+  }, function(choice)
+    if not choice then
+      return
+    end
+    require("pr-viewer.ui.thread").input({ title = "Review body (optional)" }, function(body)
+      drafts.submit(session, choice.event, body or "", function(err)
+        if err then
+          vim.notify("pr-viewer.nvim: submit failed: " .. err, vim.log.levels.ERROR)
+        else
+          vim.notify(
+            ("pr-viewer.nvim: review submitted (%s)"):format(choice.event),
+            vim.log.levels.INFO
+          )
+        end
+      end)
+    end)
+  end)
+end
+
 ---@param session PrViewer.Session
 function M.close(session)
   require("pr-viewer.ui.layout").close(session)

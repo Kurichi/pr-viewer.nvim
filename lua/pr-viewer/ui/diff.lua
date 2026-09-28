@@ -144,6 +144,24 @@ function M.show(session, idx, cb)
   end)
 end
 
+--- 表示中のファイルの sign を描き直す（バッファは差し替えない）。
+---@param session PrViewer.Session
+function M.refresh_signs(session)
+  local file = session.pr.files[session.file_index]
+  if not file or not alive(session) then
+    return
+  end
+  local threads = session.threads_by_path[file.path] or {}
+  local b = session.bufs.base[file.path]
+  local h = session.bufs.head[file.path]
+  if b and vim.api.nvim_buf_is_valid(b) then
+    signs.place(b, threads, "LEFT")
+  end
+  if h and vim.api.nvim_buf_is_valid(h) then
+    signs.place(h, threads, "RIGHT")
+  end
+end
+
 --- 現在のウィンドウがどちらの side か。files パネルなら nil。
 ---@param session PrViewer.Session
 ---@return "LEFT"|"RIGHT"?
