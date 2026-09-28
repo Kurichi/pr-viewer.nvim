@@ -1,6 +1,6 @@
 # pr-viewer.nvim 設計ドキュメント
 
-最終更新: 2026-09-28（M3 実装時点）
+最終更新: 2026-09-28（M4 実装時点）
 
 ## 1. ゴール
 
@@ -84,7 +84,7 @@ review.nvim 側を壊さずに済み、pr-viewer は PR 専用のデータモデ
 - **viewed トグル**: 即座にローカル状態と表示を変え、`sync.debounce_ms`（既定 500ms）でまとめて `markFileAsViewed` / `unmarkFileAsViewed` mutation を裏で投げる。同じファイルの連打は最後の状態だけ送る。失敗時だけ通知して表示を戻す
 - **コメント（下書き）**: 置き場所は GitHub の **pending review**（他のクライアントからも見え、Neovim を落としても残る）。`,c` は即座にローカルにスレッドを作って表示し、裏で `addPullRequestReview`（pending review の作成、初回のみ・直列化）→ `addPullRequestReviewThread` を送る。ネットワーク等の一時的な失敗なら `stdpath("state")/pr-viewer/<owner>/<repo>/<number>.json` に退避し、次回 open 時と submit 前に再送する。GitHub が拒否した（位置が diff 外など）恒久的な失敗は再送しても無駄なので、通知して下書きを消す
 - **submit**: `submitPullRequestReview` 1 回（下書きが無ければ `addPullRequestReview` に event を付けて 1 回）。ローカル退避分が残っていれば送信を中止する
-- **返信 / resolve**: 既存スレッドへの操作は対象が明確なので個別 mutation でよいが、同じく楽観的更新にする（M4）
+- **返信 / resolve**: 既存スレッドへの操作は対象が明確なので個別 mutation。同じく楽観的更新（返信は末尾に即追加、失敗で取り消し。resolve は即トグル、失敗で戻す）。返信は会話を待たせないため pending review に入れず即公開する
 
 ## 3. アーキテクチャ
 
@@ -111,8 +111,9 @@ lua/pr-viewer/
     actions.lua     キーマップから呼ぶ操作（toggle_viewed, next/prev file, next/prev thread, show_thread, close）
     keymaps.lua     バッファローカルキーマップの attach / detach
     thread.lua      スレッド float（表示 + 本文入力）
-    picker.lua      vim.ui.select 既定、telescope / snacks 任意                        [M4]
+    （picker は vim.ui.select 直接。telescope / snacks 連携は M5 で picker.lua に切り出す）
   drafts.lua        下書きのライフサイクル（add / edit / delete / resend / submit）D7
+  threads.lua       既存スレッドへの返信（即公開）と resolve / unresolve（楽観的更新）
   signs.lua         extmark sign / virt_text（review.nvim から移植）
   storage.lua       送信失敗した下書きの退避 JSON（review.nvim から移植）
 plugin/pr-viewer.lua   :PR コマンド定義のみ（require は遅延）
@@ -146,7 +147,7 @@ plugin/pr-viewer.lua   :PR コマンド定義のみ（require は遅延）
 | `]t` / `[t` | 次 / 前のスレッド（ファイルをまたぐ） | M1 |
 | `,c` | カーソル行 / 選択範囲にコメント（下書き） | M3 |
 | `,e` / `,d` | カーソル行の下書きを編集 / 削除 | M3 |
-| `,r` | スレッドに返信 | M4 |
+| `,r` | スレッドに返信（pending review には入れず即公開） | M4 |
 | `,R` | スレッドを resolve / unresolve | M4 |
 | `,s` | レビュー送信（approve / request changes / comment を選ぶ） | M3 |
 | `,l` | スレッド・下書き一覧（picker） | M4 |
@@ -161,7 +162,7 @@ plugin/pr-viewer.lua   :PR コマンド定義のみ（require は遅延）
 | M1 ✅ | **読み取り専用ビュー** | `:PR open N` で 1 秒以内に 2 ペイン diff。ファイル一覧、既存スレッドの表示、`]f` `]t` 移動。API 呼び出しは 1 回（ページング除く） |
 | M2 ✅ | **viewed の楽観的同期** | `,<Space>` で即座に表示が変わり、GitHub 側にも反映される。連打しても mutation はまとめて 1 回 |
 | M3 ✅ | **リモート下書きと送信** | `,c` の下書きが GitHub の pending review に非同期で乗り、失敗時はローカル退避 + 再送。`,s` で `submitPullRequestReview` 1 回 |
-| M4 | **既存スレッド操作・PR 一覧** | 返信・resolve、`:PR list` picker、`:PR` 引数なしでカレントブランチ |
+| M4 ✅ | **既存スレッド操作・PR 一覧** | 返信・resolve（楽観的更新）、`:PR list` picker、`:PR` 引数なしでカレントブランチ（1 クエリ） |
 | M5 | 仕上げ | vimdoc、telescope / snacks picker、libuv transport（任意）、大規模 PR でのページング検証 |
 
 各マイルストーンは 1 PR 以上に分割してよいが、**「API 呼び出し回数」の原則を崩す変更は PR 本文で理由を書く**（PR テンプレートに欄あり）。

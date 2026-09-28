@@ -12,11 +12,12 @@ describe("pr-viewer.session.parse_target", function()
     )
   end)
 
-  it("rejects empty and garbage", function()
-    local t, err = session_mod.parse_target(nil)
+  it("treats empty as the current branch and rejects garbage", function()
+    assert.are.same({}, session_mod.parse_target(nil))
+    assert.are.same({}, session_mod.parse_target(""))
+    local t, err = session_mod.parse_target("abc")
     assert.is_nil(t)
-    assert.matches("required", err)
-    assert.is_nil(session_mod.parse_target("abc"))
+    assert.matches("cannot parse", err)
   end)
 end)
 
@@ -199,6 +200,56 @@ describe("pr-viewer.session.open + ui (integration)", function()
     H.wait(function()
       return not sync.is_dirty(session)
     end)
+  end)
+
+  it("opens the PR for the current branch with one query", function()
+    gh.restore()
+    gh = H.fake_gh(H.pr_data_by_branch(repo))
+    repo.git("switch", "-q", "-c", "feat")
+    local result
+    session_mod.open({}, function(err, s)
+      result = { err = err, s = s }
+    end)
+    H.wait(function()
+      return result ~= nil
+    end)
+    assert.is_nil(result.err)
+    session = result.s
+    assert.are.equal(7, session.pr.number)
+    assert.are.equal(1, gh.calls)
+    assert.are.equal("kurichi", session.pr.viewer)
+  end)
+
+  it("reports when the branch has no open PR", function()
+    gh.restore()
+    gh = H.fake_gh({ viewer = { login = "k" }, repository = { pullRequests = { nodes = {} } } })
+    repo.git("switch", "-q", "-c", "lonely")
+    local result
+    session_mod.open({}, function(err, s)
+      result = { err = err, s = s }
+    end)
+    H.wait(function()
+      return result ~= nil
+    end)
+    assert.matches("no open pull request for branch lonely", result.err)
+  end)
+
+  it("lists open pull requests", function()
+    gh.restore()
+    gh = H.fake_gh(H.list_data())
+    local result
+    session_mod.list(function(err, list, remote)
+      result = { err = err, list = list, remote = remote }
+    end)
+    H.wait(function()
+      return result ~= nil
+    end)
+    assert.is_nil(result.err)
+    assert.are.equal("owner", result.remote.owner)
+    assert.are.equal(2, #result.list)
+    assert.are.equal(9, result.list[1].number)
+    assert.is_true(result.list[2].is_draft)
+    assert.is_nil(result.list[2].review_decision)
   end)
 
   it("falls back to git show for the head pane when HEAD differs", function()

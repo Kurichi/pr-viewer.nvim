@@ -3,7 +3,7 @@
 GitHub Pull Request viewer for Neovim.
 **One request to open, zero while reviewing, one to submit.**
 
-> Status: **M3 (drafts and submit)**. `:PR open <number|url>` shows a two-pane diff with the file list and existing review threads, `,<Space>` marks files as viewed, `,c` adds draft comments to your GitHub pending review, and `,s` submits the review. Replying to and resolving existing threads come next. See [docs/DESIGN.md](docs/DESIGN.md) for goals, decisions, and the roadmap.
+> Status: **M4 (threads and pickers)**. Open the PR for the current branch with `:PR`, pick one with `:PR list`, review with a two-pane diff, mark files viewed, add draft comments to your GitHub pending review, reply to and resolve threads, and submit. Remaining: vimdoc and optional telescope / snacks pickers (M5). See [docs/DESIGN.md](docs/DESIGN.md) for goals, decisions, and the roadmap.
 
 ## Why another PR plugin?
 
@@ -40,9 +40,9 @@ Run `:checkhealth pr-viewer` to verify `gh` and authentication.
 
 | Command | Description |
 |---|---|
+| `:PR` / `:PR open` | Open the PR for the current branch (one query) |
 | `:PR open <number\|url>` | Open a PR: `123`, `owner/repo#123`, or a GitHub URL |
-| `:PR open` | Open the PR for the current branch (M4, not yet) |
-| `:PR list` | Pick a PR (M4, not yet) |
+| `:PR list` | Pick an open PR (`vim.ui.select`) |
 | `:PR health` | `:checkhealth pr-viewer` |
 
 Default buffer-local keymaps (see `lua/pr-viewer/config.lua`):
@@ -55,6 +55,9 @@ Default buffer-local keymaps (see `lua/pr-viewer/config.lua`):
 | `K` | Show the thread(s) on the cursor line |
 | `,c` | Add a draft comment on the cursor line (or the visual selection) |
 | `,e` / `,d` | Edit / delete the draft on the cursor line |
+| `,r` | Reply to the thread on the cursor line (published immediately) |
+| `,R` | Resolve / unresolve the thread on the cursor line |
+| `,l` | List threads and drafts, jump to one |
 | `,s` | Submit the review (comment / approve / request changes) |
 | `<CR>` | Open the file under the cursor (file panel) |
 | `q` | Close the PR view |
