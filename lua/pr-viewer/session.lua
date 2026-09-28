@@ -35,6 +35,8 @@ local M = {}
 ---@field bound_bufs table<integer, true> キーマップを張った実ファイルバッファ
 ---@field on_update fun()? 追加ページ取得後に ui が再描画するためのフック
 ---@field sync PrViewer.SyncState? gh/sync.lua が遅延初期化する
+---@field on_threads_changed fun()? 下書きの追加・送信状態の変化後に ui が sign と一覧を描き直すフック
+---@field _review_waiters fun(err: string?, id: string?)[]? drafts.lua が pending review 作成の直列化に使う
 
 ---@type table<integer, PrViewer.Session> tabpage -> session
 M.by_tab = {}
@@ -213,6 +215,8 @@ function M.open(target, cb)
     }
     M.reindex(session)
     session.file_index = M.first_file_index(session)
+    -- 送信に失敗して退避していた下書きがあれば読み込んで再送する
+    require("pr-viewer.drafts").load_local(session)
 
     vim.schedule(function()
       cb(nil, session)

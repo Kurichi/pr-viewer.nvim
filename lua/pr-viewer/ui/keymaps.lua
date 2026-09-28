@@ -15,10 +15,10 @@ function M.attach(session, buf, extra)
 
   local keys = config.get().keymaps
   local actions = require("pr-viewer.ui.actions")
-  local map = function(name, fn, desc)
+  local map = function(name, fn, desc, modes)
     local lhs = keys[name]
     if lhs and lhs ~= "" then
-      vim.keymap.set("n", lhs, function()
+      vim.keymap.set(modes or "n", lhs, function()
         fn(session)
       end, { buffer = buf, nowait = true, silent = true, desc = "pr-viewer: " .. desc })
     end
@@ -30,9 +30,13 @@ function M.attach(session, buf, extra)
   map("next_thread", actions.next_thread, "Next thread")
   map("prev_thread", actions.prev_thread, "Previous thread")
   map("show_thread", actions.show_thread, "Show thread at cursor")
+  map("add_comment", actions.add_comment, "Add draft comment", { "n", "x" })
+  map("edit_comment", actions.edit_comment, "Edit draft comment")
+  map("delete_comment", actions.delete_comment, "Delete draft comment")
+  map("submit", actions.submit, "Submit review")
   map("close", actions.close, "Close PR view")
   for name, fn in pairs(extra or {}) do
-    map(name, fn, name:gsub("_", " "))
+    map(name, fn, (name:gsub("_", " ")))
   end
 end
 
@@ -45,6 +49,7 @@ function M.detach_all(session)
       for _, lhs in pairs(keys) do
         if lhs and lhs ~= "" then
           pcall(vim.keymap.del, "n", lhs, { buffer = buf })
+          pcall(vim.keymap.del, "x", lhs, { buffer = buf })
         end
       end
       vim.b[buf].pr_viewer_bound = nil

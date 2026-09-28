@@ -61,6 +61,13 @@ function M.open(session)
     end
     require("pr-viewer.ui.files").render(session)
   end)
+  session.on_threads_changed = function()
+    if not session.tab or not vim.api.nvim_tabpage_is_valid(session.tab) then
+      return
+    end
+    require("pr-viewer.ui.files").render(session)
+    require("pr-viewer.ui.diff").refresh_signs(session)
+  end
   session.on_update = function()
     require("pr-viewer.ui.files").render(session)
     if session.file_index > 0 then

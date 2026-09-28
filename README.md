@@ -3,7 +3,7 @@
 GitHub Pull Request viewer for Neovim.
 **One request to open, zero while reviewing, one to submit.**
 
-> Status: **M2 (viewed sync)**. `:PR open <number|url>` shows a two-pane diff with the file list and existing review threads, and `,<Space>` marks files as viewed (optimistic, synced in the background). Commenting and submitting are not implemented yet. See [docs/DESIGN.md](docs/DESIGN.md) for goals, decisions, and the roadmap.
+> Status: **M3 (drafts and submit)**. `:PR open <number|url>` shows a two-pane diff with the file list and existing review threads, `,<Space>` marks files as viewed, `,c` adds draft comments to your GitHub pending review, and `,s` submits the review. Replying to and resolving existing threads come next. See [docs/DESIGN.md](docs/DESIGN.md) for goals, decisions, and the roadmap.
 
 ## Why another PR plugin?
 
@@ -11,7 +11,8 @@ GitHub Pull Request viewer for Neovim.
 
 - Opening a PR fetches everything (metadata, changed files, viewed state, review threads) in **one GraphQL query**.
 - Reviewing runs **entirely on local state**: the diff comes from local git (`git show base:path` vs. your working tree, so LSP works), viewed marks are optimistic and synced in the background, comments stay local.
-- Submitting sends all comments in **one `addPullRequestReview` mutation**.
+- Draft comments go to your GitHub **pending review** in the background (so they survive restarts and show up in the browser). If a send fails, the draft is kept locally and retried later.
+- Submitting is **one `submitPullRequestReview` mutation**.
 
 ## Requirements
 
@@ -52,6 +53,9 @@ Default buffer-local keymaps (see `lua/pr-viewer/config.lua`):
 | `]f` / `[f` | Next / previous file |
 | `]t` / `[t` | Next / previous review thread (across files) |
 | `K` | Show the thread(s) on the cursor line |
+| `,c` | Add a draft comment on the cursor line (or the visual selection) |
+| `,e` / `,d` | Edit / delete the draft on the cursor line |
+| `,s` | Submit the review (comment / approve / request changes) |
 | `<CR>` | Open the file under the cursor (file panel) |
 | `q` | Close the PR view |
 

@@ -6,6 +6,7 @@ local M = {}
 
 M.pull_request = [[
 query PullRequest($owner: String!, $name: String!, $number: Int!, $filesCursor: String, $threadsCursor: String) {
+  viewer { login }
   repository(owner: $owner, name: $name) {
     pullRequest(number: $number) {
       id
@@ -23,6 +24,7 @@ query PullRequest($owner: String!, $name: String!, $number: Int!, $filesCursor: 
       headRepository { nameWithOwner }
       viewerLatestReview { id state }
       reviewDecision
+      pendingReviews: reviews(first: 1, states: [PENDING]) { nodes { id } }
       files(first: 100, after: $filesCursor) {
         pageInfo { hasNextPage endCursor }
         nodes { path additions deletions changeType viewerViewedState }
@@ -53,6 +55,90 @@ query PullRequest($owner: String!, $name: String!, $number: Int!, $filesCursor: 
         }
       }
     }
+  }
+}
+]]
+
+-- スレッド 1 件分のフィールド。query と addPullRequestReviewThread の戻りで共有する
+M.thread_fields = [[
+  id
+  isResolved
+  isOutdated
+  isCollapsed
+  path
+  line
+  startLine
+  diffSide
+  startDiffSide
+  comments(first: 50) {
+    nodes {
+      id
+      databaseId
+      author { login }
+      body
+      createdAt
+      url
+      pullRequestReview { id state }
+    }
+  }
+]]
+
+-- pending review を作る（下書きの入れ物。event を付けないと PENDING になる）
+M.create_pending_review = [[
+mutation CreatePendingReview($pr: ID!, $commit: GitObjectID) {
+  addPullRequestReview(input: { pullRequestId: $pr, commitOID: $commit }) {
+    pullRequestReview { id state }
+  }
+}
+]]
+
+-- pending review に下書きスレッドを追加する
+M.add_review_thread = [[
+mutation AddReviewThread(
+  $review: ID!, $path: String!, $line: Int!, $side: DiffSide!,
+  $startLine: Int, $startSide: DiffSide, $body: String!
+) {
+  addPullRequestReviewThread(input: {
+    pullRequestReviewId: $review, path: $path, line: $line, side: $side,
+    startLine: $startLine, startSide: $startSide, body: $body
+  }) {
+    thread {
+]] .. M.thread_fields .. [[
+    }
+  }
+}
+]]
+
+M.update_review_comment = [[
+mutation UpdateReviewComment($id: ID!, $body: String!) {
+  updatePullRequestReviewComment(input: { pullRequestReviewCommentId: $id, body: $body }) {
+    pullRequestReviewComment { id body }
+  }
+}
+]]
+
+M.delete_review_comment = [[
+mutation DeleteReviewComment($id: ID!) {
+  deletePullRequestReviewComment(input: { id: $id }) {
+    pullRequestReview { id }
+  }
+}
+]]
+
+-- pending review を送信する
+M.submit_review = [[
+mutation SubmitReview($review: ID!, $event: PullRequestReviewEvent!, $body: String) {
+  submitPullRequestReview(input: { pullRequestReviewId: $review, event: $event, body: $body }) {
+    pullRequestReview { id state }
+  }
+}
+]]
+
+-- pending review が無いまま approve 等だけ送る
+M.add_review_with_event = [[
+mutation AddReviewWithEvent($pr: ID!, $event: PullRequestReviewEvent!, $body: String, $commit: GitObjectID) {
+  addPullRequestReview(input: { pullRequestId: $pr, event: $event, body: $body, commitOID: $commit }) {
+    pullRequestReview { id state }
   }
 }
 ]]

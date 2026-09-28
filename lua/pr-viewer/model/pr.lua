@@ -31,6 +31,9 @@ end
 ---@field resolved boolean
 ---@field outdated boolean
 ---@field comments PrViewer.Comment[]
+---@field pending boolean 自分の pending review に属する下書きスレッド
+---@field sync "synced"|"sending"|"local"? 下書きの送信状態（pending のときだけ）
+---@field local_id string? ローカル退避用の識別子（pending のときだけ）
 
 ---@class PrViewer.File
 ---@field path string
@@ -55,6 +58,8 @@ end
 ---@field head_repo string?
 ---@field review_decision string?
 ---@field viewer_review_state string?
+---@field viewer string ログイン中のユーザー
+---@field pending_review_id string? 自分の pending review（下書きの入れ物）
 ---@field files PrViewer.File[]
 ---@field threads PrViewer.Thread[]
 ---@field files_cursor string? 続きがあるときだけ endCursor
@@ -81,6 +86,12 @@ function M.thread_from_node(node)
   for _, c in ipairs(node.comments and node.comments.nodes or {}) do
     comments[#comments + 1] = comment_from_node(c)
   end
+  local pending = #comments > 0
+  for _, c in ipairs(comments) do
+    if c.review_state ~= "PENDING" then
+      pending = false
+    end
+  end
   return {
     id = node.id,
     path = node.path,
@@ -91,6 +102,8 @@ function M.thread_from_node(node)
     resolved = node.isResolved == true,
     outdated = node.isOutdated == true,
     comments = comments,
+    pending = pending,
+    sync = pending and "synced" or nil,
   }
 end
 
@@ -150,9 +163,15 @@ function M.from_graphql(data)
     head_repo = val(node.headRepository) and node.headRepository.nameWithOwner or nil,
     review_decision = val(node.reviewDecision),
     viewer_review_state = val(node.viewerLatestReview) and node.viewerLatestReview.state or nil,
+    viewer = val(data.viewer) and data.viewer.login or "",
+    pending_review_id = nil,
     files = {},
     threads = {},
   }
+  local pending = val(node.pendingReviews)
+  if pending and pending.nodes and pending.nodes[1] then
+    pr.pending_review_id = pending.nodes[1].id
+  end
   M.merge_page(pr, node)
   return pr
 end
@@ -174,19 +193,25 @@ end
 ---@field viewed integer
 ---@field threads integer
 ---@field unresolved integer
+---@field drafts integer
 
 ---@param pr PrViewer.PR
 ---@return PrViewer.Stats
 function M.stats(pr)
-  local s = { files = #pr.files, viewed = 0, threads = #pr.threads, unresolved = 0 }
+  local s = { files = #pr.files, viewed = 0, threads = 0, unresolved = 0, drafts = 0 }
   for _, f in ipairs(pr.files) do
     if f.viewed == "VIEWED" then
       s.viewed = s.viewed + 1
     end
   end
   for _, t in ipairs(pr.threads) do
-    if not t.resolved then
-      s.unresolved = s.unresolved + 1
+    if t.pending then
+      s.drafts = s.drafts + 1
+    else
+      s.threads = s.threads + 1
+      if not t.resolved then
+        s.unresolved = s.unresolved + 1
+      end
     end
   end
   return s

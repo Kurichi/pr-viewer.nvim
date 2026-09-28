@@ -22,6 +22,7 @@ local M = {}
 ---@field diff PrViewer.Config.Diff
 ---@field ui PrViewer.Config.Ui
 ---@field keymaps table<string, string|false> バッファローカルキーマップ。false で無効化
+---@field storage_dir string? 送信に失敗した下書きの退避先（既定: stdpath("state")/pr-viewer）
 
 ---@type PrViewer.Config
 M.defaults = {
@@ -51,6 +52,8 @@ M.defaults = {
     show_thread = "K",
     open_file = "<CR>", -- ファイル一覧パネルのみ
     add_comment = "<localleader>c",
+    edit_comment = "<localleader>e",
+    delete_comment = "<localleader>d",
     reply = "<localleader>r",
     resolve = "<localleader>R",
     submit = "<localleader>s",
