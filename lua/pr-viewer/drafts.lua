@@ -143,11 +143,24 @@ local function adopt(thread, node)
   thread.sync = "synced"
 end
 
+--- 同期済みの下書きが 1 件でもあるか。
+---@param session PrViewer.Session
+---@return boolean
+local function has_synced_drafts(session)
+  for _, t in ipairs(session.pr.threads) do
+    if t.pending and t.sync == "synced" then
+      return true
+    end
+  end
+  return false
+end
+
 --- 下書き 1 件を送る。
 ---@param session PrViewer.Session
 ---@param thread PrViewer.Thread
 ---@param cb? fun(err: string?)
-local function send(session, thread, cb)
+---@param retried? boolean
+local function send(session, thread, cb, retried)
   thread.sync = "sending"
   async.run(function()
     local review = async.must(async.await(function(k)
@@ -171,6 +184,16 @@ local function send(session, thread, cb)
       cb(nil)
     end
   end, function(err)
+    if
+      err:find("Could not resolve to a node", 1, true)
+      and session.pr.pending_review_id
+      and not retried
+    then
+      -- pending review がブラウザ等で消されて id が古い（最後のコメントを消すと GitHub は review も消す）。
+      -- id を捨てて作り直し、1 回だけやり直す
+      session.pr.pending_review_id = nil
+      return send(session, thread, cb, true)
+    end
     if is_permanent(err) then
       -- GitHub に拒否された: 再送しても無駄なので消す
       for i, t in ipairs(session.pr.threads) do
@@ -252,6 +275,9 @@ function M.delete(session, thread)
           "pr-viewer.nvim: failed to delete comment on GitHub: " .. err,
           vim.log.levels.ERROR
         )
+      elseif not has_synced_drafts(session) then
+        -- 最後のコメントを消すと GitHub は pending review ごと消す
+        session.pr.pending_review_id = nil
       end
     end)
   end
@@ -352,7 +378,8 @@ function M.submit(session, event, body, cb)
     if body == "" then
       body = nil
     end
-    if session.pr.pending_review_id then
+    -- 下書きが無い pending review は GitHub 側に存在しない（空になると消える）ので、id があっても使わない
+    if session.pr.pending_review_id and has_synced_drafts(session) then
       transport.graphql(graphql.submit_review, {
         review = session.pr.pending_review_id,
         event = event,

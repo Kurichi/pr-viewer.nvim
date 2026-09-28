@@ -15,6 +15,14 @@ local function fake_gh()
     if st.mode == "network_error" then
       return on_exit({ code = 1, stdout = "", stderr = "dial tcp: connection refused", signal = 0 })
     end
+    if kind == "AddReviewThread" and body.variables.review == "REV_stale" then
+      return on_exit({
+        code = 1,
+        stdout = "",
+        stderr = "gh: Could not resolve to a node with the global id of 'REV_stale'.",
+        signal = 0,
+      })
+    end
     if st.mode == "rejected" and kind == "AddReviewThread" then
       return on_exit({
         code = 0,
@@ -231,6 +239,10 @@ describe("pr-viewer.drafts", function()
       return gh.count("DeleteReviewComment") == 1
     end)
     assert.are.same({ id = "C_srv2" }, gh.calls[#gh.calls].variables)
+    -- 最後の下書きを消すと GitHub は pending review も消すので、id を持ち続けない
+    settle(function()
+      return s.pr.pending_review_id == nil
+    end)
   end)
 
   it("submits the pending review in one request and clears draft state", function()
@@ -270,6 +282,40 @@ describe("pr-viewer.drafts", function()
     assert.is_nil(result.err)
     assert.are.equal(1, gh.count("AddReviewWithEvent"))
     assert.are.same({ pr = "PR_1", event = "COMMENT", commit = "h" }, gh.calls[#gh.calls].variables)
+  end)
+
+  it("recreates the pending review when the cached id is stale", function()
+    local s = new_session(dir)
+    s.pr.pending_review_id = "REV_stale" -- ブラウザで消された想定
+    local t = drafts.add(s, { path = "a.lua", side = "RIGHT", line = 3 }, "again")
+    settle(function()
+      return t.sync == "synced"
+    end)
+    assert.are.equal(1, gh.count("CreatePendingReview"))
+    assert.are.equal(2, gh.count("AddReviewThread")) -- stale で 1 回失敗、作り直して成功
+    assert.are.equal("REV_1", s.pr.pending_review_id)
+  end)
+
+  it("submits via addPullRequestReview when the pending review has no drafts left", function()
+    local s = new_session(dir)
+    local t = drafts.add(s, { path = "a.lua", side = "RIGHT", line = 3 }, "tmp")
+    settle(function()
+      return t.sync == "synced"
+    end)
+    drafts.delete(s, t)
+    settle(function()
+      return s.pr.pending_review_id == nil
+    end)
+    local result
+    drafts.submit(s, "COMMENT", "just a comment", function(err)
+      result = { err = err }
+    end)
+    settle(function()
+      return result ~= nil
+    end)
+    assert.is_nil(result.err)
+    assert.are.equal(0, gh.count("SubmitReview"))
+    assert.are.equal(1, gh.count("AddReviewWithEvent"))
   end)
 
   it("refuses to submit while drafts are stuck locally", function()
