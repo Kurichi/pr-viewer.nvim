@@ -37,7 +37,6 @@ end
 
 ---@param session PrViewer.Session
 function M.open(session)
-  local ui = config.get().ui
   vim.cmd.tabnew()
   local tab = vim.api.nvim_get_current_tabpage()
   local files_win = vim.api.nvim_get_current_win()
