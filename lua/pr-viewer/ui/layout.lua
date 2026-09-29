@@ -16,9 +16,27 @@ local function set_win_opts(win, opts)
   end
 end
 
+--- files を固定幅にし、残りを base / head で半分ずつ分ける。
+--- files を縮めただけだと、余った幅がすべて隣の base に渡って base だけ広くなる。
+---@param wins { files: integer, base: integer, head: integer }
+function M.equalize(wins)
+  for _, w in pairs(wins) do
+    if not vim.api.nvim_win_is_valid(w) then
+      return
+    end
+  end
+  local files_width = config.get().ui.files_width
+  vim.api.nvim_win_set_width(wins.files, files_width)
+  -- nvim_win_get_width は区切り線を含まないので、合計から files を引けば base + head の中身の幅になる
+  local total = vim.api.nvim_win_get_width(wins.files)
+    + vim.api.nvim_win_get_width(wins.base)
+    + vim.api.nvim_win_get_width(wins.head)
+  local rest = total - vim.api.nvim_win_get_width(wins.files)
+  vim.api.nvim_win_set_width(wins.base, math.floor(rest / 2))
+end
+
 ---@param session PrViewer.Session
 function M.open(session)
-  local ui = config.get().ui
   vim.cmd.tabnew()
   local tab = vim.api.nvim_get_current_tabpage()
   local files_win = vim.api.nvim_get_current_win()
@@ -34,7 +52,7 @@ function M.open(session)
     split = "right",
     win = base_win,
   })
-  vim.api.nvim_win_set_width(files_win, ui.files_width)
+  M.equalize({ files = files_win, base = base_win, head = head_win })
 
   set_win_opts(files_win, {
     number = false,
@@ -75,6 +93,15 @@ function M.open(session)
     end
   end
   vim.api.nvim_tabpage_set_var(tab, "pr_viewer", session.pr.number)
+
+  vim.api.nvim_create_autocmd("VimResized", {
+    group = augroup,
+    callback = function()
+      if session_mod.by_tab[tab] == session and vim.api.nvim_get_current_tabpage() == tab then
+        M.equalize(session.wins)
+      end
+    end,
+  })
 
   -- gd などで head ペインに別ファイルが開かれても q / ]f が効くようにする
   vim.api.nvim_create_autocmd("BufWinEnter", {

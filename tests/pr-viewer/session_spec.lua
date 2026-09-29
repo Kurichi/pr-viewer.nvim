@@ -62,11 +62,17 @@ describe("pr-viewer.session.open + ui (integration)", function()
   end)
 
   it("opens a tab with files | base | head and switches files", function()
+    vim.o.columns = 200
     local layout = require("pr-viewer.ui.layout")
     local actions = require("pr-viewer.ui.actions")
     local tabs_before = #vim.api.nvim_list_tabpages()
     layout.open(session)
     assert.are.equal(tabs_before + 1, #vim.api.nvim_list_tabpages())
+    -- files は固定幅、base と head は 1 列差以内（旧実装は base だけ広がっていた）
+    assert.are.equal(36, vim.api.nvim_win_get_width(session.wins.files))
+    local bw, hw =
+      vim.api.nvim_win_get_width(session.wins.base), vim.api.nvim_win_get_width(session.wins.head)
+    assert.is_true(math.abs(bw - hw) <= 1, ("base=%d head=%d"):format(bw, hw))
     assert.are.equal(session, session_mod.current())
 
     local function base_name()
