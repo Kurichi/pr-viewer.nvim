@@ -26,6 +26,7 @@ local M = {}
 ---@field git_root string
 ---@field merge_base string
 ---@field head_local boolean 作業ツリーの HEAD が PR の head と一致する
+---@field worktree_root string? HEAD が一致しないときに用意した PR head の worktree
 ---@field file_index integer
 ---@field threads_by_path table<string, PrViewer.Thread[]>
 ---@field anchors PrViewer.ThreadAnchor[] file_index, line 順
@@ -221,6 +222,25 @@ function M.open(target, cb)
     local _, head = async.await(function(k)
       git.rev_parse(root, "HEAD", k)
     end)
+    local head_local = (head == pr.head_oid)
+    local worktree_root
+    local cfg = require("pr-viewer.config").get().diff
+    if not head_local and cfg.use_local_fs then
+      local dir = cfg.worktree_dir or (vim.fn.stdpath("cache") .. "/pr-viewer/worktrees")
+      local path = ("%s/%s/%s/%d"):format(dir, owner, repo, pr.number)
+      local wt_err, wt = async.await(function(k)
+        git.worktree_ensure(root, path, pr.head_oid, k)
+      end)
+      if wt_err then
+        vim.notify(
+          "pr-viewer.nvim: could not prepare a worktree for the PR head, right pane will be read-only: "
+            .. wt_err,
+          vim.log.levels.WARN
+        )
+      else
+        worktree_root = wt
+      end
+    end
 
     ---@type PrViewer.Session
     local session = {
@@ -229,7 +249,8 @@ function M.open(target, cb)
       pr = pr,
       git_root = root,
       merge_base = merge_base,
-      head_local = (head == pr.head_oid),
+      head_local = head_local,
+      worktree_root = worktree_root,
       file_index = 0,
       threads_by_path = {},
       anchors = {},

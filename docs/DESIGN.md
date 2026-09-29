@@ -63,7 +63,7 @@ review.nvim 側を壊さずに済み、pr-viewer は PR 専用のデータモデ
 
 - base / head のコミットが手元に無ければ、最初に 1 回だけ `git fetch origin <baseRefOid> <headRefOid>`（PR head は `refs/pull/N/head` でも取れる）
 - 比較基準は merge-base（3-dot）。`git merge-base <base> <head>` をローカルで計算する
-- 右ペインは `use_local_fs = true` かつ head をチェックアウト中なら作業ツリーの実ファイル（LSP・gd がそのまま効く）。それ以外は `git show <head>:<path>` の scratch バッファにフォールバック
+- 右ペインは常に実ファイル（LSP・gd が効く）。`HEAD` が PR head なら作業ツリー、違えば `stdpath("cache")/pr-viewer/worktrees/<owner>/<repo>/<N>` に PR head を detached でチェックアウトした worktree を使う（ユーザーのブランチには触れない。2 回目以降は使い回す）。`use_local_fs = false` なら `git show <head>:<path>` の scratch バッファ
 - 両ペインを `diffthis` で並べる。GitHub 側の diff テキストは使わない（表示差異の原因になり、API も増える）
 
 ### D5. 状態はメモリ上の 1 テーブル（PR ごと）。ディスクに残すのは送信に失敗した下書きだけ
@@ -152,6 +152,7 @@ plugin/pr-viewer.lua   :PR コマンド定義のみ（require は遅延）
 | `,s` | レビュー送信（approve / request changes / comment を選ぶ） | M3 |
 | `,l` | スレッド・下書き一覧（picker） | M4 |
 | `q` | レビューを閉じる（下書きは保持） | M1 |
+| `,v` | カーソル行のスレッドを float 表示（`K` は LSP hover に残す） | M1 |
 | `,?` | バッファローカルキー一覧（dotfiles 側の既存機能で代用） | - |
 
 ## 4. マイルストーン

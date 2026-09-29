@@ -52,7 +52,7 @@ Default buffer-local keymaps (see `lua/pr-viewer/config.lua`):
 | `,<Space>` | Toggle viewed for the current file (or the file under the cursor in the panel). Changes show instantly and sync in one batched request after `sync.debounce_ms` |
 | `]f` / `[f` | Next / previous file |
 | `]t` / `[t` | Next / previous review thread (across files) |
-| `K` | Show the thread(s) on the cursor line |
+| `,v` | Show the thread(s) on the cursor line (`K` stays LSP hover) |
 | `,c` | Add a draft comment on the cursor line (or the visual selection) |
 | `,e` / `,d` | Edit / delete the draft on the cursor line |
 | `,r` | Reply to the thread on the cursor line (published immediately) |
@@ -62,7 +62,7 @@ Default buffer-local keymaps (see `lua/pr-viewer/config.lua`):
 | `<CR>` | Open the file under the cursor (file panel) |
 | `q` | Close the PR view |
 
-The left pane is `git show <merge-base>:<path>`. The right pane is the real file from your working tree when `HEAD` matches the PR head (so LSP works), otherwise `git show <head>:<path>`.
+The left pane is `git show <merge-base>:<path>`. The right pane is always a real file so LSP (`gd`, `K`, ...) works: your working tree when `HEAD` matches the PR head, otherwise a detached worktree of the PR head under `stdpath("cache")/pr-viewer/worktrees` (your branch is never touched). Set `diff.use_local_fs = false` to use `git show <head>:<path>` instead.
 
 ## Development
 

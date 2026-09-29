@@ -61,10 +61,12 @@ local function head_buf(session, file)
   if cached and vim.api.nvim_buf_is_valid(cached) then
     return cached
   end
-  local abs = session.git_root .. "/" .. file.path
+  -- HEAD が PR head なら作業ツリー、違えば session.open が用意した worktree の実ファイル
+  local dir = session.head_local and session.git_root or session.worktree_root
+  local abs = dir and (dir .. "/" .. file.path)
   if
     config.get().diff.use_local_fs
-    and session.head_local
+    and abs
     and file.change_type ~= "DELETED"
     and vim.uv.fs_stat(abs)
   then

@@ -76,6 +76,16 @@ function M.open(session)
   end
   vim.api.nvim_tabpage_set_var(tab, "pr_viewer", session.pr.number)
 
+  -- gd などで head ペインに別ファイルが開かれても q / ]f が効くようにする
+  vim.api.nvim_create_autocmd("BufWinEnter", {
+    group = augroup,
+    callback = function(ev)
+      if session_mod.by_tab[tab] == session and vim.api.nvim_get_current_win() == head_win then
+        keymaps.attach(session, ev.buf)
+      end
+    end,
+  })
+
   vim.api.nvim_create_autocmd("TabClosed", {
     group = augroup,
     callback = function(ev)

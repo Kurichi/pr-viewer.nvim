@@ -8,7 +8,8 @@ local M = {}
 ---@field debounce_ms integer 楽観的更新の裏同期をまとめる待ち時間
 
 ---@class PrViewer.Config.Diff
----@field use_local_fs boolean head をチェックアウト中なら右ペインに実ファイルを使う（LSP を効かせる）
+---@field use_local_fs boolean 右ペインに実ファイルを使う（LSP を効かせる）。HEAD が PR head なら作業ツリー、違えば専用 worktree
+---@field worktree_dir string? PR head 用 worktree の置き場（既定: stdpath("cache")/pr-viewer/worktrees）
 
 ---@class PrViewer.Config.Ui
 ---@field files_width integer ファイル一覧パネルの幅
@@ -49,7 +50,7 @@ M.defaults = {
     prev_file = "[f",
     next_thread = "]t",
     prev_thread = "[t",
-    show_thread = "K",
+    show_thread = "<localleader>v", -- K は Neovim 0.11 の LSP hover 既定なので奪わない
     open_file = "<CR>", -- ファイル一覧パネルのみ
     add_comment = "<localleader>c",
     edit_comment = "<localleader>e",
