@@ -252,8 +252,62 @@ describe("pr-viewer.session.open + ui (integration)", function()
     assert.is_nil(result.list[2].review_decision)
   end)
 
-  it("falls back to git show for the head pane when HEAD differs", function()
+  it("uses a detached worktree for the head pane when HEAD differs", function()
     repo.git("checkout", "-q", repo.base)
+    local wt_dir = vim.fn.tempname()
+    require("pr-viewer.config").setup({ diff = { worktree_dir = wt_dir } })
+    gh.restore()
+    gh = H.fake_gh(H.pr_data(repo))
+    local result
+    session_mod.open({ number = 7 }, function(err, s)
+      result = { err = err, s = s }
+    end)
+    H.wait(function()
+      return result ~= nil
+    end)
+    session = result.s
+    assert.is_false(session.head_local)
+    assert.are.equal(wt_dir .. "/owner/repo/7", session.worktree_root)
+    assert.are.equal(
+      repo.head,
+      vim.trim(
+        vim
+          .system({ "git", "-C", session.worktree_root, "rev-parse", "HEAD" }, { text = true })
+          :wait().stdout
+      )
+    )
+    require("pr-viewer.ui.layout").open(session)
+    require("pr-viewer.ui.diff").show(session, 3)
+    H.wait(function()
+      return vim.api
+        .nvim_buf_get_name(vim.api.nvim_win_get_buf(session.wins.head))
+        :match("/owner/repo/7/c%.lua$") ~= nil
+    end)
+    local h = vim.api.nvim_win_get_buf(session.wins.head)
+    assert.are.equal("", vim.bo[h].buftype) -- 実ファイル: LSP が付く
+    assert.are.same({ "return {}" }, vim.api.nvim_buf_get_lines(h, 0, -1, false))
+    assert.matches(
+      "head: worktree",
+      vim.api.nvim_buf_get_lines(vim.api.nvim_win_get_buf(session.wins.files), 1, 2, false)[1]
+    )
+    require("pr-viewer.ui.layout").close(session)
+
+    -- 2 回目は既存の worktree を使い回す（作り直さない）
+    local result2
+    session_mod.open({ number = 7 }, function(err, s)
+      result2 = { err = err, s = s }
+    end)
+    H.wait(function()
+      return result2 ~= nil
+    end)
+    assert.is_nil(result2.err)
+    assert.are.equal(session.worktree_root, result2.s.worktree_root)
+    session = result2.s
+  end)
+
+  it("falls back to git show for the head pane when use_local_fs is off", function()
+    repo.git("checkout", "-q", repo.base)
+    require("pr-viewer.config").setup({ diff = { use_local_fs = false } })
     gh.restore()
     gh = H.fake_gh(H.pr_data(repo))
     local result

@@ -104,6 +104,33 @@ function M.rev_parse(root, rev, cb)
   end)
 end
 
+--- PR head 用の worktree を用意する（無ければ作り、あれば oid に合わせる）。
+--- ユーザーの作業ツリーには触れない。LSP はこの worktree をルートとして付く。
+---@param root string メインリポジトリ
+---@param path string worktree のパス
+---@param oid string チェックアウトするコミット
+---@param cb fun(err: string?, path: string?)
+function M.worktree_ensure(root, path, oid, cb)
+  -- 手で消された worktree の登録を掃除してから判定する
+  M.exec({ "worktree", "prune" }, root, function()
+    if vim.uv.fs_stat(path .. "/.git") then
+      M.rev_parse(path, "HEAD", function(err, head)
+        if not err and head == oid then
+          return cb(nil, path)
+        end
+        M.exec({ "checkout", "-q", "--detach", oid }, path, function(e)
+          cb(e, path)
+        end)
+      end)
+      return
+    end
+    vim.fn.mkdir(vim.fs.dirname(path), "p")
+    M.exec({ "worktree", "add", "--detach", path, oid }, root, function(e)
+      cb(e, path)
+    end)
+  end)
+end
+
 --- `git show <rev>:<path>` の内容を行配列で返す。rev にファイルが無ければ空配列。
 ---@param root string
 ---@param rev string

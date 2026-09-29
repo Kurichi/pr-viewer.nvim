@@ -60,7 +60,13 @@ function M.render(session, buf)
   local state = pr.is_draft and "DRAFT" or pr.state
   local lines = {
     ("#%d %s"):format(pr.number, pr.title),
-    ("@%s  %s ← %s  %s"):format(pr.author, pr.base_ref, pr.head_ref, state),
+    ("@%s  %s ← %s  %s  [head: %s]"):format(
+      pr.author,
+      pr.base_ref,
+      pr.head_ref,
+      state,
+      session.head_local and "local" or (session.worktree_root and "worktree" or "git show")
+    ),
     ("viewed %d/%d · threads %d (%d open)"):format(
       stats.viewed,
       stats.files,
